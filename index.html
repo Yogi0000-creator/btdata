@@ -222,18 +222,41 @@
             setTimeout(() => { flash.style.opacity = '0'; }, 250);
         }
 
+        // Multi-line Text Parser
         function parseQRData(rawText) {
             let billNo = "", billDate = "", customerName = "", amount = "";
-            
-            let bMatch = rawText.match(/Bill No:\s*([^\n\r]+)/i);
-            let dMatch = rawText.match(/Date:\s*([^\n\r]+)/i);
-            let cMatch = rawText.match(/Customer:\s*([^\n\r]+)/i);
-            let aMatch = rawText.match(/Amount:\s*([^\n\r]+)/i);
+            let lines = rawText.split(/\r?\n/);
 
-            if (bMatch) billNo = bMatch[1].trim();
-            if (dMatch) billDate = dMatch[1].trim();
-            if (cMatch) customerName = cMatch[1].trim();
-            if (aMatch) amount = aMatch[1].trim();
+            lines.forEach(line => {
+                let cleanLine = line.trim();
+                if (/^Bill No:/i.test(cleanLine)) {
+                    billNo = cleanLine.replace(/^Bill No:\s*/i, "").trim();
+                } else if (/^Date:/i.test(cleanLine)) {
+                    billDate = cleanLine.replace(/^Date:\s*/i, "").trim();
+                } else if (/^Customer:/i.test(cleanLine)) {
+                    customerName = cleanLine.replace(/^Customer:\s*/i, "").trim();
+                } else if (/^Amount:/i.test(cleanLine)) {
+                    amount = cleanLine.replace(/^Amount:\s*/i, "").trim();
+                }
+            });
+
+            // Regex Fallback
+            if (!billNo) {
+                let bMatch = rawText.match(/Bill No:\s*([^\n\r]+)/i);
+                if (bMatch) billNo = bMatch[1].trim();
+            }
+            if (!billDate) {
+                let dMatch = rawText.match(/Date:\s*([^\n\r]+)/i);
+                if (dMatch) billDate = dMatch[1].trim();
+            }
+            if (!customerName) {
+                let cMatch = rawText.match(/Customer:\s*([^\n\r]+)/i);
+                if (cMatch) customerName = cMatch[1].trim();
+            }
+            if (!amount) {
+                let aMatch = rawText.match(/Amount:\s*([^\n\r]+)/i);
+                if (aMatch) amount = aMatch[1].trim();
+            }
 
             return { billNo, billDate, customerName, amount, rawText };
         }
@@ -324,7 +347,7 @@
             let currentTime = Date.now();
             let parsed = parseQRData(decodedText);
 
-            // Validation: Agar QR me Bill No. nahi hai to Ignore kar do
+            // Invalid Check: Agar Bill No. na mile to Ignored
             if (!parsed.billNo) {
                 document.getElementById('status').innerText = "⚠️ Invalid QR: Bill No Not Found!";
                 document.getElementById('status').style.color = "red";
