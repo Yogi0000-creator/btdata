@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Non-Stop QR Code Scanner</title>
+    <title>Super-Fast Non-Stop QR Scanner</title>
     <!-- HTML5-QRCode Library -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
@@ -11,7 +11,8 @@
             font-family: Arial, sans-serif;
             text-align: center;
             background-color: #f4f4f9;
-            padding: 20px;
+            padding: 15px;
+            margin: 0;
         }
 
         /* Login Box Styles */
@@ -52,26 +53,29 @@
 
         /* Scanner Box Styles */
         #scanner-container {
-            display: none; /* Login hone tak hide rahega */
+            display: none;
+            max-width: 500px;
+            margin: 0 auto;
         }
         #reader {
             width: 100%;
-            max-width: 500px;
-            margin: 0 auto;
-            border: 2px solid #333;
-            border-radius: 8px;
+            border: 2px solid #007bff;
+            border-radius: 12px;
             overflow: hidden;
+            background: #000;
         }
         #scanned-result {
-            margin-top: 20px;
-            font-size: 18px;
+            margin-top: 15px;
+            font-size: 16px;
             font-weight: bold;
             color: #2c3e50;
+            word-break: break-all;
         }
         .status {
-            margin-top: 10px;
+            margin-top: 8px;
             font-size: 14px;
-            color: green;
+            color: #28a745;
+            font-weight: 500;
         }
     </style>
 </head>
@@ -88,7 +92,7 @@
 
     <!-- 2. SCANNER SCREEN -->
     <div id="scanner-container">
-        <h2>Non-Stop Live QR Scanner</h2>
+        <h2>Ultra-Fast QR Scanner</h2>
         <div id="reader"></div>
         <div id="scanned-result">Last Scanned: None</div>
         <div id="status" class="status">Ready to scan...</div>
@@ -99,12 +103,19 @@
         // SETTINGS: User ID, Password aur Script URL
         const CORRECT_USER = "admin";
         const CORRECT_PASS = "2519";
-        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwdf8ChXqDhYkxqfvQau_UccjfZd7MAEIbyuNhmwBjEZErNOqNEZUk5Sb57HUY_MNA/exec";
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvfptV9RJ5Fq6a5wmZoDwMmDZjeFJ9O0Wnyh0ZwDlzfht1v9fm9GVfkBlXAvejw8XA/exec";
         // -------------------------------------------------------------
 
         let isProcessing = false;
-        let html5QrcodeScanner = null;
+        let html5QrCode = null;
         let audioCtx = null;
+
+        // Audio Context Unlock
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
 
         // Login Verify Function
         function checkLogin() {
@@ -112,43 +123,40 @@
             const passIn = document.getElementById('password').value;
 
             if (userIn === CORRECT_USER && passIn === CORRECT_PASS) {
-                // Initialize Audio Context on click to unlock audio permissions on browser
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                
+                initAudio();
                 document.getElementById('login-container').style.display = 'none';
                 document.getElementById('scanner-container').style.display = 'block';
-                startScanner(); // Login successful hone par scanner start hoga
+                startUltraFastScanner();
             } else {
                 document.getElementById('error-msg').innerText = "Incorrect User ID or Password!";
             }
         }
 
-        // Beep Sound Function
+        // Instant Beep Sound
         function playBeep() {
             try {
-                if (!audioCtx) {
-                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                }
+                if (!audioCtx) initAudio();
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
                 
                 osc.type = "sine";
-                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(900, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
                 
                 osc.connect(gain);
                 gain.connect(audioCtx.destination);
                 
                 osc.start();
-                osc.stop(audioCtx.currentTime + 0.15);
+                osc.stop(audioCtx.currentTime + 0.1);
             } catch (e) {
                 console.log("Audio play error:", e);
             }
         }
 
-        // Google Sheet par Data bhejne ka function
+        // Send Data to Google Sheet
         function sendDataToGoogleSheet(qrText) {
-            document.getElementById('status').innerText = "Sending to Google Sheet...";
+            document.getElementById('status').innerText = "Saving to Google Sheet...";
+            document.getElementById('status').style.color = "#ff9800";
             
             fetch(GOOGLE_SCRIPT_URL, {
                 method: "POST",
@@ -159,21 +167,23 @@
                 body: JSON.stringify({ qrData: qrText })
             })
             .then(() => {
-                document.getElementById('status').innerText = "Saved to Sheet successfully!";
+                document.getElementById('status').innerText = "Saved successfully!";
+                document.getElementById('status').style.color = "#28a745";
                 setTimeout(() => {
                     document.getElementById('status').innerText = "Ready for next scan...";
                     isProcessing = false;
-                }, 1000);
+                }, 800); // 0.8 sec Fast Cooldown
             })
             .catch(error => {
                 console.error("Error:", error);
                 document.getElementById('status').innerText = "Failed to save data.";
+                document.getElementById('status').style.color = "red";
                 isProcessing = false;
             });
         }
 
         // Scan Success Handler
-        function onScanSuccess(decodedText, decodedResult) {
+        function onScanSuccess(decodedText) {
             if (isProcessing) return;
 
             isProcessing = true;
@@ -183,29 +193,41 @@
             sendDataToGoogleSheet(decodedText);
         }
 
-        function onScanFailure(error) {
-            // Continuous scanning error bypass
-        }
+        // Ultra-Fast Scanner Setup
+        function startUltraFastScanner() {
+            html5QrCode = new Html5Qrcode("reader", {
+                experimentalFeatures: {
+                    useBarCodeDetectorIfSupported: true // Native Browser Acceleration
+                }
+            });
 
-        // Scanner Start Function with Back Camera Preferred
-        function startScanner() {
-            html5QrcodeScanner = new Html5QrcodeScanner(
-                "reader", 
-                { 
-                    fps: 15, 
-                    qrbox: { width: 250, height: 250 },
-                    aspectRatio: 1.0,
-                    experimentalFeatures: {
-                        useBarCodeDetectorIfSupported: true
-                    },
-                    // Mobile Back Camera Config
-                    videoConstraints: {
-                        facingMode: "environment"
-                    }
-                }, 
-                false
-            );
-            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+            const config = {
+                fps: 25, // High Frame Rate
+                qrbox: function(viewfinderWidth, viewfinderHeight) {
+                    let minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                    return {
+                        width: Math.floor(minEdge * 0.8),
+                        height: Math.floor(minEdge * 0.8)
+                    };
+                },
+                aspectRatio: 1.0
+            };
+
+            const cameraConfig = {
+                facingMode: "environment", // Back Camera Preferred
+                width: { min: 640, ideal: 1280 },
+                height: { min: 480, ideal: 720 }
+            };
+
+            html5QrCode.start(
+                cameraConfig,
+                config,
+                onScanSuccess,
+                () => {} // Fast bypass on frame errors
+            ).catch(err => {
+                console.error("Camera error:", err);
+                document.getElementById('status').innerText = "Camera permission required!";
+            });
         }
     </script>
 </body>
