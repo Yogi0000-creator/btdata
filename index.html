@@ -209,7 +209,6 @@
             }
         }
 
-        // Instant Beep
         function playBeep() {
             try {
                 if (!audioCtx) initAudio();
@@ -225,35 +224,54 @@
             } catch (e) { console.log(e); }
         }
 
-        // Visual Green Flash Animation
         function triggerFlash() {
             const flash = document.getElementById('scan-flash');
             flash.style.opacity = '1';
             setTimeout(() => { flash.style.opacity = '0'; }, 250);
         }
 
-        // Dashboard Summary Update
+        // QR Text Parse Helper Function
+        function parseQRData(rawText) {
+            let billNo = "", billDate = "", customerName = "", amount = "";
+            let bMatch = rawText.match(/Bill No:\s*([^\n\r]+)/i);
+            let dMatch = rawText.match(/Date:\s*([^\n\r]+)/i);
+            let cMatch = rawText.match(/Customer:\s*([^\n\r]+)/i);
+            let aMatch = rawText.match(/Amount:\s*([^\n\r]+)/i);
+
+            if (bMatch) billNo = bMatch[1].trim();
+            if (dMatch) billDate = dMatch[1].trim();
+            if (cMatch) customerName = cMatch[1].trim();
+            if (aMatch) amount = aMatch[1].trim();
+
+            return { billNo, billDate, customerName, amount, rawText };
+        }
+
         function updateDashboard() {
             document.getElementById('total-scans').innerText = scanHistory.length;
             let sum = 0;
             scanHistory.forEach(item => {
-                let match = item.qrData.match(/Amount:\s*([\d.]+)/i);
-                if (match) sum += parseFloat(match[1]);
+                let parsed = parseQRData(item.qrData);
+                if (parsed.amount) {
+                    let numericVal = parseFloat(parsed.amount);
+                    if (!isNaN(numericVal)) sum += numericVal;
+                }
             });
             document.getElementById('total-amount').innerText = "₹" + sum.toFixed(2);
             document.getElementById('pending-sync').innerText = offlineQueue.length;
         }
 
-        // Offline Data Storage & Sync
         function processDataSave(qrText) {
-            let record = { qrData: qrText, timestamp: new Date().toISOString() };
+            let parsedData = parseQRData(qrText);
+            let record = { qrData: qrText, parsed: parsedData, timestamp: new Date().toISOString() };
+            
             scanHistory.push(record);
             localStorage.setItem("scanHistory", JSON.stringify(scanHistory));
+            updateDashboard(); // Total tabhi update hoga jab valid new record add hoga
             
             if (navigator.onLine) {
-                sendDataToGoogleSheet(qrText);
+                sendDataToGoogleSheet(parsedData);
             } else {
-                offlineQueue.push(qrText);
+                offlineQueue.push(parsedData);
                 localStorage.setItem("offlineQueue", JSON.stringify(offlineQueue));
                 document.getElementById('status').innerText = "Saved Offline (No Internet)";
                 document.getElementById('status').style.color = "#ff9800";
@@ -262,10 +280,9 @@
                     isProcessing = false;
                 }, 800);
             }
-            updateDashboard();
         }
 
-        function sendDataToGoogleSheet(qrText) {
+        function sendDataToGoogleSheet(parsedData) {
             document.getElementById('status').innerText = "Saving to Google Sheet...";
             document.getElementById('status').style.color = "#ff9800";
             
@@ -273,7 +290,7 @@
                 method: "POST",
                 mode: "no-cors",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ qrData: qrText })
+                body: JSON.stringify(parsedData)
             })
             .then(() => {
                 document.getElementById('status').innerText = "Saved successfully!";
@@ -284,7 +301,7 @@
                 }, 800);
             })
             .catch(error => {
-                offlineQueue.push(qrText);
+                offlineQueue.push(parsedData);
                 localStorage.setItem("offlineQueue", JSON.stringify(offlineQueue));
                 document.getElementById('status').innerText = "Network Error: Queued Offline";
                 isProcessing = false;
@@ -292,7 +309,6 @@
             });
         }
 
-        // Auto Sync Offline Queue when Internet Returns
         window.addEventListener('online', syncOfflineData);
         function syncOfflineData() {
             if (offlineQueue.length === 0 || !navigator.onLine) return;
@@ -302,7 +318,7 @@
                 method: "POST",
                 mode: "no-cors",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ qrData: item })
+                body: JSON.stringify(item)
             }).then(() => {
                 offlineQueue.shift();
                 localStorage.setItem("offlineQueue", JSON.stringify(offlineQueue));
@@ -311,13 +327,14 @@
             });
         }
 
-        // Scan Success Handler with Duplicate Check
         function onScanSuccess(decodedText) {
             let currentTime = Date.now();
             
-            // Duplicate Prevention: Block if same QR scanned within 8 seconds
-            if (decodedText === lastScannedText && (currentTime - lastScannedTime) < 8000) {
-                document.getElementById('status').innerText = "⚠️ Duplicate Scan Prevented!";
+            // Fix 1: Strictly check duplicate entries based on last scanned string or history check
+            let isAlreadyScanned = scanHistory.some(item => item.qrData === decodedText);
+
+            if (isAlreadyScanned || (decodedText === lastScannedText && (currentTime - lastScannedTime) < 10000)) {
+                document.getElementById('status').innerText = "⚠️ Duplicate Scan Ignored!";
                 document.getElementById('status').style.color = "red";
                 return;
             }
@@ -335,7 +352,6 @@
             processDataSave(decodedText);
         }
 
-        // Flashlight / Torch Control
         function toggleTorch() {
             if (!html5QrCode) return;
             torchOn = !torchOn;
@@ -346,27 +362,25 @@
             }).catch(err => alert("Torch not supported on this device"));
         }
 
-        // Export Scanned Data to Excel/CSV File
         function exportToCSV() {
             if (scanHistory.length === 0) {
                 alert("No scanned data to export!");
                 return;
             }
-            let csvContent = "data:text/csv;charset=utf-8,Timestamp,QR Data\n";
+            let csvContent = "data:text/csv;charset=utf-8,Timestamp,Bill No,Date,Customer,Amount\n";
             scanHistory.forEach(row => {
-                let cleanData = `"${row.qrData.replace(/"/g, '""')}"`;
-                csvContent += `${row.timestamp},${cleanData}\n`;
+                let p = row.parsed || parseQRData(row.qrData);
+                csvContent += `${row.timestamp},"${p.billNo}","${p.billDate}","${p.customerName}","${p.amount}"\n`;
             });
             let encodedUri = encodeURI(csvContent);
             let link = document.createElement("a");
             link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `QR_Scan_Report_${new Date().toLocaleDateString()}.csv`);
+            link.setAttribute("download", `QR_Report_${new Date().toLocaleDateString()}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         }
 
-        // Start High-Speed Camera
         function startUltraFastScanner() {
             html5QrCode = new Html5Qrcode("reader", {
                 experimentalFeatures: { useBarCodeDetectorIfSupported: true }
