@@ -15,7 +15,6 @@
             margin: 0;
         }
 
-        /* Login Box Styles */
         #login-container {
             max-width: 350px;
             margin: 40px auto;
@@ -44,14 +43,12 @@
         }
         #error-msg { color: red; margin-top: 10px; font-size: 14px; }
 
-        /* Main App Container */
         #scanner-container {
             display: none;
             max-width: 500px;
             margin: 0 auto;
         }
 
-        /* Dashboard Cards */
         .dashboard {
             display: flex;
             justify-content: space-between;
@@ -68,7 +65,6 @@
         .card h4 { margin: 0; font-size: 11px; color: #666; }
         .card p { margin: 5px 0 0 0; font-size: 16px; font-weight: bold; color: #007bff; }
 
-        /* Camera Box & Overlay Flash */
         #reader-wrapper {
             position: relative;
             border-radius: 12px;
@@ -93,7 +89,6 @@
             z-index: 10;
         }
 
-        /* Control Buttons */
         .controls {
             display: flex;
             gap: 8px;
@@ -131,7 +126,6 @@
 </head>
 <body>
 
-    <!-- 1. LOGIN SCREEN -->
     <div id="login-container">
         <h2>Scanner Login</h2>
         <input type="text" id="username" placeholder="User ID">
@@ -140,9 +134,7 @@
         <div id="error-msg"></div>
     </div>
 
-    <!-- 2. SCANNER SCREEN -->
     <div id="scanner-container">
-        <!-- Live Dashboard -->
         <div class="dashboard">
             <div class="card">
                 <h4>TOTAL SCANS</h4>
@@ -158,13 +150,11 @@
             </div>
         </div>
 
-        <!-- Camera Scanner Area -->
         <div id="reader-wrapper">
             <div id="reader"></div>
             <div id="scan-flash">✓</div>
         </div>
 
-        <!-- Controls -->
         <div class="controls">
             <button id="torch-btn" class="btn btn-torch" onclick="toggleTorch()">Torch ON</button>
             <button class="btn btn-export" onclick="exportToCSV()">Export Excel</button>
@@ -176,7 +166,6 @@
     </div>
 
     <script>
-        // SETTINGS
         const CORRECT_USER = "admin";
         const CORRECT_PASS = "2519";
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvfptV9RJ5Fq6a5wmZoDwMmDZjeFJ9O0Wnyh0ZwDlzfht1v9fm9GVfkBlXAvejw8XA/exec";
@@ -189,7 +178,6 @@
         let lastScannedText = "";
         let lastScannedTime = 0;
         
-        // Data Store
         let scanHistory = JSON.parse(localStorage.getItem("scanHistory") || "[]");
         let offlineQueue = JSON.parse(localStorage.getItem("offlineQueue") || "[]");
 
@@ -234,7 +222,6 @@
             setTimeout(() => { flash.style.opacity = '0'; }, 250);
         }
 
-        // QR Data Extraction Helper
         function parseQRData(rawText) {
             let billNo = "", billDate = "", customerName = "", amount = "";
             
@@ -251,7 +238,6 @@
             return { billNo, billDate, customerName, amount, rawText };
         }
 
-        // Update Dashboard Summary
         function updateDashboard() {
             document.getElementById('total-scans').innerText = scanHistory.length;
             let sum = 0;
@@ -268,11 +254,9 @@
             document.getElementById('pending-sync').innerText = offlineQueue.length;
         }
 
-        // Save & Process Data
         function processDataSave(qrText, parsedData) {
             let record = { qrData: qrText, parsed: parsedData, timestamp: new Date().toISOString() };
             
-            // Sirf Unique data add kar rahe hain
             scanHistory.push(record);
             localStorage.setItem("scanHistory", JSON.stringify(scanHistory));
             updateDashboard();
@@ -298,7 +282,7 @@
             fetch(GOOGLE_SCRIPT_URL, {
                 method: "POST",
                 mode: "no-cors",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify(parsedData)
             })
             .then(() => {
@@ -326,7 +310,7 @@
             fetch(GOOGLE_SCRIPT_URL, {
                 method: "POST",
                 mode: "no-cors",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify(item)
             }).then(() => {
                 offlineQueue.shift();
@@ -336,22 +320,24 @@
             });
         }
 
-        // Strict Scan Success Logic
         function onScanSuccess(decodedText) {
             let currentTime = Date.now();
             let parsed = parseQRData(decodedText);
 
-            // Check 1: Bill No. duplicate check (agar bill no mila toh)
-            let isBillDuplicate = parsed.billNo && scanHistory.some(item => {
+            // Validation: Agar QR me Bill No. nahi hai to Ignore kar do
+            if (!parsed.billNo) {
+                document.getElementById('status').innerText = "⚠️ Invalid QR: Bill No Not Found!";
+                document.getElementById('status').style.color = "red";
+                return;
+            }
+
+            // Duplicate Check
+            let isBillDuplicate = scanHistory.some(item => {
                 let p = item.parsed || parseQRData(item.qrData);
                 return p.billNo === parsed.billNo;
             });
 
-            // Check 2: Raw QR text duplicate check
-            let isTextDuplicate = scanHistory.some(item => item.qrData === decodedText);
-
-            // Agar duplicate hai toh turant REJECT kar do
-            if (isBillDuplicate || isTextDuplicate || (decodedText === lastScannedText && (currentTime - lastScannedTime) < 10000)) {
+            if (isBillDuplicate || (decodedText === lastScannedText && (currentTime - lastScannedTime) < 10000)) {
                 document.getElementById('status').innerText = "⚠️ Duplicate Scan Ignored!";
                 document.getElementById('status').style.color = "red";
                 return;
@@ -366,13 +352,12 @@
             playBeep();
             triggerFlash();
 
-            document.getElementById('scanned-result').innerText = "Last Scanned: " + (parsed.billNo || decodedText);
+            document.getElementById('scanned-result').innerText = "Last Scanned: " + parsed.billNo;
             processDataSave(decodedText, parsed);
         }
 
-        // Reset All Local Counter Data
         function resetCounterData() {
-            if (confirm("Kya aap sach me aaj ka total counter aur local scan history reset (clear) karna chahte hain?")) {
+            if (confirm("Kya aap local scan history clear karna chahte hain?")) {
                 scanHistory = [];
                 offlineQueue = [];
                 localStorage.removeItem("scanHistory");
