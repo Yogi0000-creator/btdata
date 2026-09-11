@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super-Fast Non-Stop QR Scanner</title>
+    <title>Pro Non-Stop QR Scanner</title>
     <!-- HTML5-QRCode Library -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
@@ -18,7 +18,7 @@
         /* Login Box Styles */
         #login-container {
             max-width: 350px;
-            margin: 50px auto;
+            margin: 40px auto;
             padding: 25px;
             background: #ffffff;
             border-radius: 10px;
@@ -42,40 +42,87 @@
             font-size: 16px;
             cursor: pointer;
         }
-        #login-container button:hover {
-            background-color: #0056b3;
-        }
-        #error-msg {
-            color: red;
-            margin-top: 10px;
-            font-size: 14px;
-        }
+        #error-msg { color: red; margin-top: 10px; font-size: 14px; }
 
-        /* Scanner Box Styles */
+        /* Main App Container */
         #scanner-container {
             display: none;
             max-width: 500px;
             margin: 0 auto;
         }
-        #reader {
-            width: 100%;
-            border: 2px solid #007bff;
+
+        /* Dashboard Cards */
+        .dashboard {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            gap: 10px;
+        }
+        .card {
+            flex: 1;
+            background: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .card h4 { margin: 0; font-size: 12px; color: #666; }
+        .card p { margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #007bff; }
+
+        /* Camera Box & Overlay Flash */
+        #reader-wrapper {
+            position: relative;
             border-radius: 12px;
             overflow: hidden;
+            border: 2px solid #007bff;
             background: #000;
         }
+        #reader { width: 100%; }
+        
+        #scan-flash {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(40, 167, 69, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 50px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease-in-out;
+            z-index: 10;
+        }
+
+        /* Control Buttons */
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            color: white;
+        }
+        .btn-torch { background-color: #ff9800; }
+        .btn-export { background-color: #28a745; }
+
         #scanned-result {
-            margin-top: 15px;
-            font-size: 16px;
+            margin-top: 12px;
+            font-size: 15px;
             font-weight: bold;
             color: #2c3e50;
             word-break: break-all;
         }
         .status {
-            margin-top: 8px;
-            font-size: 14px;
+            margin-top: 6px;
+            font-size: 13px;
             color: #28a745;
-            font-weight: 500;
+            font-weight: 600;
         }
     </style>
 </head>
@@ -92,32 +139,60 @@
 
     <!-- 2. SCANNER SCREEN -->
     <div id="scanner-container">
-        <h2>Ultra-Fast QR Scanner</h2>
-        <div id="reader"></div>
+        <!-- Live Dashboard -->
+        <div class="dashboard">
+            <div class="card">
+                <h4>TOTAL SCANS</h4>
+                <p id="total-scans">0</p>
+            </div>
+            <div class="card">
+                <h4>TOTAL AMOUNT</h4>
+                <p id="total-amount">₹0.00</p>
+            </div>
+            <div class="card">
+                <h4>PENDING SYNC</h4>
+                <p id="pending-sync" style="color: #e67e22;">0</p>
+            </div>
+        </div>
+
+        <!-- Camera Scanner Area -->
+        <div id="reader-wrapper">
+            <div id="reader"></div>
+            <div id="scan-flash">✓</div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <button id="torch-btn" class="btn btn-torch" onclick="toggleTorch()">Torch ON</button>
+            <button class="btn btn-export" onclick="exportToCSV()">Export Excel</button>
+        </div>
+
         <div id="scanned-result">Last Scanned: None</div>
         <div id="status" class="status">Ready to scan...</div>
     </div>
 
     <script>
-        // -------------------------------------------------------------
-        // SETTINGS: User ID, Password aur Script URL
+        // SETTINGS
         const CORRECT_USER = "admin";
         const CORRECT_PASS = "2519";
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvfptV9RJ5Fq6a5wmZoDwMmDZjeFJ9O0Wnyh0ZwDlzfht1v9fm9GVfkBlXAvejw8XA/exec";
-        // -------------------------------------------------------------
 
         let isProcessing = false;
         let html5QrCode = null;
         let audioCtx = null;
+        let torchOn = false;
+        
+        let lastScannedText = "";
+        let lastScannedTime = 0;
+        
+        // Data Store
+        let scanHistory = JSON.parse(localStorage.getItem("scanHistory") || "[]");
+        let offlineQueue = JSON.parse(localStorage.getItem("offlineQueue") || "[]");
 
-        // Audio Context Unlock
         function initAudio() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         }
 
-        // Login Verify Function
         function checkLogin() {
             const userIn = document.getElementById('username').value;
             const passIn = document.getElementById('password').value;
@@ -126,34 +201,70 @@
                 initAudio();
                 document.getElementById('login-container').style.display = 'none';
                 document.getElementById('scanner-container').style.display = 'block';
+                updateDashboard();
                 startUltraFastScanner();
+                syncOfflineData();
             } else {
                 document.getElementById('error-msg').innerText = "Incorrect User ID or Password!";
             }
         }
 
-        // Instant Beep Sound
+        // Instant Beep
         function playBeep() {
             try {
                 if (!audioCtx) initAudio();
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
-                
                 osc.type = "sine";
                 osc.frequency.setValueAtTime(900, audioCtx.currentTime);
                 gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-                
                 osc.connect(gain);
                 gain.connect(audioCtx.destination);
-                
                 osc.start();
                 osc.stop(audioCtx.currentTime + 0.1);
-            } catch (e) {
-                console.log("Audio play error:", e);
-            }
+            } catch (e) { console.log(e); }
         }
 
-        // Send Data to Google Sheet
+        // Visual Green Flash Animation
+        function triggerFlash() {
+            const flash = document.getElementById('scan-flash');
+            flash.style.opacity = '1';
+            setTimeout(() => { flash.style.opacity = '0'; }, 250);
+        }
+
+        // Dashboard Summary Update
+        function updateDashboard() {
+            document.getElementById('total-scans').innerText = scanHistory.length;
+            let sum = 0;
+            scanHistory.forEach(item => {
+                let match = item.qrData.match(/Amount:\s*([\d.]+)/i);
+                if (match) sum += parseFloat(match[1]);
+            });
+            document.getElementById('total-amount').innerText = "₹" + sum.toFixed(2);
+            document.getElementById('pending-sync').innerText = offlineQueue.length;
+        }
+
+        // Offline Data Storage & Sync
+        function processDataSave(qrText) {
+            let record = { qrData: qrText, timestamp: new Date().toISOString() };
+            scanHistory.push(record);
+            localStorage.setItem("scanHistory", JSON.stringify(scanHistory));
+            
+            if (navigator.onLine) {
+                sendDataToGoogleSheet(qrText);
+            } else {
+                offlineQueue.push(qrText);
+                localStorage.setItem("offlineQueue", JSON.stringify(offlineQueue));
+                document.getElementById('status').innerText = "Saved Offline (No Internet)";
+                document.getElementById('status').style.color = "#ff9800";
+                setTimeout(() => {
+                    document.getElementById('status').innerText = "Ready for next scan...";
+                    isProcessing = false;
+                }, 800);
+            }
+            updateDashboard();
+        }
+
         function sendDataToGoogleSheet(qrText) {
             document.getElementById('status').innerText = "Saving to Google Sheet...";
             document.getElementById('status').style.color = "#ff9800";
@@ -161,9 +272,7 @@
             fetch(GOOGLE_SCRIPT_URL, {
                 method: "POST",
                 mode: "no-cors",
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ qrData: qrText })
             })
             .then(() => {
@@ -172,61 +281,113 @@
                 setTimeout(() => {
                     document.getElementById('status').innerText = "Ready for next scan...";
                     isProcessing = false;
-                }, 800); // 0.8 sec Fast Cooldown
+                }, 800);
             })
             .catch(error => {
-                console.error("Error:", error);
-                document.getElementById('status').innerText = "Failed to save data.";
-                document.getElementById('status').style.color = "red";
+                offlineQueue.push(qrText);
+                localStorage.setItem("offlineQueue", JSON.stringify(offlineQueue));
+                document.getElementById('status').innerText = "Network Error: Queued Offline";
                 isProcessing = false;
+                updateDashboard();
             });
         }
 
-        // Scan Success Handler
-        function onScanSuccess(decodedText) {
-            if (isProcessing) return;
-
-            isProcessing = true;
-            playBeep();
-
-            document.getElementById('scanned-result').innerText = "Last Scanned: " + decodedText;
-            sendDataToGoogleSheet(decodedText);
+        // Auto Sync Offline Queue when Internet Returns
+        window.addEventListener('online', syncOfflineData);
+        function syncOfflineData() {
+            if (offlineQueue.length === 0 || !navigator.onLine) return;
+            
+            let item = offlineQueue[0];
+            fetch(GOOGLE_SCRIPT_URL, {
+                method: "POST",
+                mode: "no-cors",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ qrData: item })
+            }).then(() => {
+                offlineQueue.shift();
+                localStorage.setItem("offlineQueue", JSON.stringify(offlineQueue));
+                updateDashboard();
+                syncOfflineData();
+            });
         }
 
-        // Ultra-Fast Scanner Setup
+        // Scan Success Handler with Duplicate Check
+        function onScanSuccess(decodedText) {
+            let currentTime = Date.now();
+            
+            // Duplicate Prevention: Block if same QR scanned within 8 seconds
+            if (decodedText === lastScannedText && (currentTime - lastScannedTime) < 8000) {
+                document.getElementById('status').innerText = "⚠️ Duplicate Scan Prevented!";
+                document.getElementById('status').style.color = "red";
+                return;
+            }
+
+            if (isProcessing) return;
+            isProcessing = true;
+
+            lastScannedText = decodedText;
+            lastScannedTime = currentTime;
+
+            playBeep();
+            triggerFlash();
+
+            document.getElementById('scanned-result').innerText = "Last Scanned: " + decodedText;
+            processDataSave(decodedText);
+        }
+
+        // Flashlight / Torch Control
+        function toggleTorch() {
+            if (!html5QrCode) return;
+            torchOn = !torchOn;
+            html5QrCode.applyVideoConstraints({
+                advanced: [{ torch: torchOn }]
+            }).then(() => {
+                document.getElementById('torch-btn').innerText = torchOn ? "Torch OFF" : "Torch ON";
+            }).catch(err => alert("Torch not supported on this device"));
+        }
+
+        // Export Scanned Data to Excel/CSV File
+        function exportToCSV() {
+            if (scanHistory.length === 0) {
+                alert("No scanned data to export!");
+                return;
+            }
+            let csvContent = "data:text/csv;charset=utf-8,Timestamp,QR Data\n";
+            scanHistory.forEach(row => {
+                let cleanData = `"${row.qrData.replace(/"/g, '""')}"`;
+                csvContent += `${row.timestamp},${cleanData}\n`;
+            });
+            let encodedUri = encodeURI(csvContent);
+            let link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `QR_Scan_Report_${new Date().toLocaleDateString()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Start High-Speed Camera
         function startUltraFastScanner() {
             html5QrCode = new Html5Qrcode("reader", {
-                experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true // Native Browser Acceleration
-                }
+                experimentalFeatures: { useBarCodeDetectorIfSupported: true }
             });
 
             const config = {
-                fps: 25, // High Frame Rate
+                fps: 25,
                 qrbox: function(viewfinderWidth, viewfinderHeight) {
                     let minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                    return {
-                        width: Math.floor(minEdge * 0.8),
-                        height: Math.floor(minEdge * 0.8)
-                    };
+                    return { width: Math.floor(minEdge * 0.8), height: Math.floor(minEdge * 0.8) };
                 },
                 aspectRatio: 1.0
             };
 
-            const cameraConfig = {
-                facingMode: "environment", // Back Camera Preferred
-                width: { min: 640, ideal: 1280 },
-                height: { min: 480, ideal: 720 }
-            };
-
             html5QrCode.start(
-                cameraConfig,
+                { facingMode: "environment" },
                 config,
                 onScanSuccess,
-                () => {} // Fast bypass on frame errors
+                () => {}
             ).catch(err => {
-                console.error("Camera error:", err);
-                document.getElementById('status').innerText = "Camera permission required!";
+                document.getElementById('status').innerText = "Camera access needed!";
             });
         }
     </script>
