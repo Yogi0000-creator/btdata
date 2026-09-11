@@ -4,124 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pro Non-Stop QR Scanner</title>
-    <!-- HTML5-QRCode Library -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            background-color: #f4f4f9;
-            padding: 15px;
-            margin: 0;
-        }
-
-        #login-container {
-            max-width: 350px;
-            margin: 40px auto;
-            padding: 25px;
-            background: #ffffff;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        }
-        #login-container input {
-            width: 90%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            font-size: 16px;
-        }
-        #login-container button {
-            width: 95%;
-            padding: 10px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-        }
+        body { font-family: Arial, sans-serif; text-align: center; background-color: #f4f4f9; padding: 15px; margin: 0; }
+        #login-container { max-width: 350px; margin: 40px auto; padding: 25px; background: #fff; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        #login-container input { width: 90%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
+        #login-container button { width: 95%; padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
         #error-msg { color: red; margin-top: 10px; font-size: 14px; }
-
-        #scanner-container {
-            display: none;
-            max-width: 500px;
-            margin: 0 auto;
-        }
-
-        .dashboard {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 12px;
-            gap: 10px;
-        }
-        .card {
-            flex: 1;
-            background: #fff;
-            padding: 10px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
+        #scanner-container { display: none; max-width: 500px; margin: 0 auto; }
+        .dashboard { display: flex; justify-content: space-between; margin-bottom: 12px; gap: 10px; }
+        .card { flex: 1; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .card h4 { margin: 0; font-size: 11px; color: #666; }
         .card p { margin: 5px 0 0 0; font-size: 16px; font-weight: bold; color: #007bff; }
-
-        #reader-wrapper {
-            position: relative;
-            border-radius: 12px;
-            overflow: hidden;
-            border: 2px solid #007bff;
-            background: #000;
-        }
+        #reader-wrapper { position: relative; border-radius: 12px; overflow: hidden; border: 2px solid #007bff; background: #000; }
         #reader { width: 100%; }
-        
-        #scan-flash {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(40, 167, 69, 0.4);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            font-size: 50px;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s ease-in-out;
-            z-index: 10;
-        }
-
-        .controls {
-            display: flex;
-            gap: 8px;
-            margin-top: 12px;
-            flex-wrap: wrap;
-        }
-        .btn {
-            flex: 1;
-            padding: 10px;
-            border: none;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-            color: white;
-            font-size: 13px;
-        }
+        #scan-flash { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(40, 167, 69, 0.4); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 50px; opacity: 0; pointer-events: none; transition: opacity 0.2s ease-in-out; z-index: 10; }
+        .controls { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+        .btn { flex: 1; padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; color: white; font-size: 13px; }
         .btn-torch { background-color: #ff9800; }
         .btn-export { background-color: #28a745; }
         .btn-reset { background-color: #dc3545; }
-
-        #scanned-result {
-            margin-top: 12px;
-            font-size: 14px;
-            font-weight: bold;
-            color: #2c3e50;
-            word-break: break-all;
-        }
-        .status {
-            margin-top: 6px;
-            font-size: 13px;
-            color: #28a745;
-            font-weight: 600;
-        }
+        #scanned-result { margin-top: 12px; font-size: 14px; font-weight: bold; color: #2c3e50; word-break: break-all; }
+        .status { margin-top: 6px; font-size: 13px; color: #28a745; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -174,22 +78,16 @@
         let html5QrCode = null;
         let audioCtx = null;
         let torchOn = false;
-        
         let lastScannedText = "";
         let lastScannedTime = 0;
         
         let scanHistory = JSON.parse(localStorage.getItem("scanHistory") || "[]");
         let offlineQueue = JSON.parse(localStorage.getItem("offlineQueue") || "[]");
 
-        function initAudio() {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
+        function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
 
         function checkLogin() {
-            const userIn = document.getElementById('username').value;
-            const passIn = document.getElementById('password').value;
-
-            if (userIn === CORRECT_USER && passIn === CORRECT_PASS) {
+            if (document.getElementById('username').value === CORRECT_USER && document.getElementById('password').value === CORRECT_PASS) {
                 initAudio();
                 document.getElementById('login-container').style.display = 'none';
                 document.getElementById('scanner-container').style.display = 'block';
@@ -209,11 +107,9 @@
                 osc.type = "sine";
                 osc.frequency.setValueAtTime(900, audioCtx.currentTime);
                 gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.1);
-            } catch (e) { console.log(e); }
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            } catch (e) {}
         }
 
         function triggerFlash() {
@@ -222,64 +118,38 @@
             setTimeout(() => { flash.style.opacity = '0'; }, 250);
         }
 
-        // Multi-line Text Parser
+        // Exact Format Parser Matching Screenshot
         function parseQRData(rawText) {
             let billNo = "", billDate = "", customerName = "", amount = "";
             let lines = rawText.split(/\r?\n/);
 
             lines.forEach(line => {
-                let cleanLine = line.trim();
-                if (/^Bill No:/i.test(cleanLine)) {
-                    billNo = cleanLine.replace(/^Bill No:\s*/i, "").trim();
-                } else if (/^Date:/i.test(cleanLine)) {
-                    billDate = cleanLine.replace(/^Date:\s*/i, "").trim();
-                } else if (/^Customer:/i.test(cleanLine)) {
-                    customerName = cleanLine.replace(/^Customer:\s*/i, "").trim();
-                } else if (/^Amount:/i.test(cleanLine)) {
-                    amount = cleanLine.replace(/^Amount:\s*/i, "").trim();
-                }
+                let clean = line.trim();
+                if (/^Bill No:/i.test(clean)) billNo = clean.split(/^Bill No:\s*/i)[1] || "";
+                else if (/^Date:/i.test(clean)) billDate = clean.split(/^Date:\s*/i)[1] || "";
+                else if (/^Customer:/i.test(clean)) customerName = clean.split(/^Customer:\s*/i)[1] || "";
+                else if (/^Amount:/i.test(clean)) amount = clean.split(/^Amount:\s*/i)[1] || "";
             });
 
-            // Regex Fallback
-            if (!billNo) {
-                let bMatch = rawText.match(/Bill No:\s*([^\n\r]+)/i);
-                if (bMatch) billNo = bMatch[1].trim();
-            }
-            if (!billDate) {
-                let dMatch = rawText.match(/Date:\s*([^\n\r]+)/i);
-                if (dMatch) billDate = dMatch[1].trim();
-            }
-            if (!customerName) {
-                let cMatch = rawText.match(/Customer:\s*([^\n\r]+)/i);
-                if (cMatch) customerName = cMatch[1].trim();
-            }
-            if (!amount) {
-                let aMatch = rawText.match(/Amount:\s*([^\n\r]+)/i);
-                if (aMatch) amount = aMatch[1].trim();
-            }
-
-            return { billNo, billDate, customerName, amount, rawText };
+            return { billNo: billNo.trim(), billDate: billDate.trim(), customerName: customerName.trim(), amount: amount.trim(), rawText };
         }
 
         function updateDashboard() {
             document.getElementById('total-scans').innerText = scanHistory.length;
             let sum = 0;
-            
             scanHistory.forEach(item => {
                 let parsed = item.parsed || parseQRData(item.qrData);
                 if (parsed.amount) {
-                    let numericVal = parseFloat(parsed.amount);
-                    if (!isNaN(numericVal)) sum += numericVal;
+                    let val = parseFloat(parsed.amount);
+                    if (!isNaN(val)) sum += val;
                 }
             });
-            
             document.getElementById('total-amount').innerText = "₹" + sum.toFixed(2);
             document.getElementById('pending-sync').innerText = offlineQueue.length;
         }
 
         function processDataSave(qrText, parsedData) {
             let record = { qrData: qrText, parsed: parsedData, timestamp: new Date().toISOString() };
-            
             scanHistory.push(record);
             localStorage.setItem("scanHistory", JSON.stringify(scanHistory));
             updateDashboard();
@@ -291,10 +161,7 @@
                 localStorage.setItem("offlineQueue", JSON.stringify(offlineQueue));
                 document.getElementById('status').innerText = "Saved Offline (No Internet)";
                 document.getElementById('status').style.color = "#ff9800";
-                setTimeout(() => {
-                    document.getElementById('status').innerText = "Ready for next scan...";
-                    isProcessing = false;
-                }, 800);
+                setTimeout(() => { document.getElementById('status').innerText = "Ready for next scan..."; isProcessing = false; }, 800);
             }
         }
 
@@ -311,15 +178,12 @@
             .then(() => {
                 document.getElementById('status').innerText = "Saved successfully!";
                 document.getElementById('status').style.color = "#28a745";
-                setTimeout(() => {
-                    document.getElementById('status').innerText = "Ready for next scan...";
-                    isProcessing = false;
-                }, 800);
+                setTimeout(() => { document.getElementById('status').innerText = "Ready for next scan..."; isProcessing = false; }, 800);
             })
-            .catch(error => {
+            .catch(() => {
                 offlineQueue.push(parsedData);
                 localStorage.setItem("offlineQueue", JSON.stringify(offlineQueue));
-                document.getElementById('status').innerText = "Network Error: Queued Offline";
+                document.getElementById('status').innerText = "Network Error: Queued";
                 isProcessing = false;
                 updateDashboard();
             });
@@ -328,7 +192,6 @@
         window.addEventListener('online', syncOfflineData);
         function syncOfflineData() {
             if (offlineQueue.length === 0 || !navigator.onLine) return;
-            
             let item = offlineQueue[0];
             fetch(GOOGLE_SCRIPT_URL, {
                 method: "POST",
@@ -347,7 +210,7 @@
             let currentTime = Date.now();
             let parsed = parseQRData(decodedText);
 
-            // Invalid Check: Agar Bill No. na mile to Ignored
+            // Strict Validation: Bill No missing means Ignore Complete QR
             if (!parsed.billNo) {
                 document.getElementById('status').innerText = "⚠️ Invalid QR: Bill No Not Found!";
                 document.getElementById('status').style.color = "red";
@@ -355,12 +218,12 @@
             }
 
             // Duplicate Check
-            let isBillDuplicate = scanHistory.some(item => {
+            let isDuplicate = scanHistory.some(item => {
                 let p = item.parsed || parseQRData(item.qrData);
                 return p.billNo === parsed.billNo;
             });
 
-            if (isBillDuplicate || (decodedText === lastScannedText && (currentTime - lastScannedTime) < 10000)) {
+            if (isDuplicate || (decodedText === lastScannedText && (currentTime - lastScannedTime) < 8000)) {
                 document.getElementById('status').innerText = "⚠️ Duplicate Scan Ignored!";
                 document.getElementById('status').style.color = "red";
                 return;
@@ -368,7 +231,6 @@
 
             if (isProcessing) return;
             isProcessing = true;
-
             lastScannedText = decodedText;
             lastScannedTime = currentTime;
 
@@ -380,15 +242,14 @@
         }
 
         function resetCounterData() {
-            if (confirm("Kya aap local scan history clear karna chahte hain?")) {
-                scanHistory = [];
-                offlineQueue = [];
+            if (confirm("History reset karein?")) {
+                scanHistory = []; offlineQueue = [];
                 localStorage.removeItem("scanHistory");
                 localStorage.removeItem("offlineQueue");
                 lastScannedText = "";
                 updateDashboard();
                 document.getElementById('scanned-result').innerText = "Last Scanned: None";
-                document.getElementById('status').innerText = "History Reset Done!";
+                document.getElementById('status').innerText = "History Cleared!";
                 document.getElementById('status').style.color = "#28a745";
             }
         }
@@ -396,54 +257,26 @@
         function toggleTorch() {
             if (!html5QrCode) return;
             torchOn = !torchOn;
-            html5QrCode.applyVideoConstraints({
-                advanced: [{ torch: torchOn }]
-            }).then(() => {
-                document.getElementById('torch-btn').innerText = torchOn ? "Torch OFF" : "Torch ON";
-            }).catch(err => alert("Torch not supported on this device"));
+            html5QrCode.applyVideoConstraints({ advanced: [{ torch: torchOn }] })
+            .then(() => { document.getElementById('torch-btn').innerText = torchOn ? "Torch OFF" : "Torch ON"; });
         }
 
         function exportToCSV() {
-            if (scanHistory.length === 0) {
-                alert("No scanned data to export!");
-                return;
-            }
-            let csvContent = "data:text/csv;charset=utf-8,Timestamp,Bill No,Date,Customer,Amount\n";
-            scanHistory.forEach(row => {
-                let p = row.parsed || parseQRData(row.qrData);
-                csvContent += `${row.timestamp},"${p.billNo}","${p.billDate}","${p.customerName}","${p.amount}"\n`;
+            if (scanHistory.length === 0) return alert("No data to export!");
+            let csv = "data:text/csv;charset=utf-8,Timestamp,Bill No,Date,Customer,Amount\n";
+            scanHistory.forEach(r => {
+                let p = r.parsed || parseQRData(r.qrData);
+                csv += `${r.timestamp},"${p.billNo}","${p.billDate}","${p.customerName}","${p.amount}"\n`;
             });
-            let encodedUri = encodeURI(csvContent);
             let link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `QR_Report_${new Date().toLocaleDateString()}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            link.href = encodeURI(csv);
+            link.download = `QR_Report_${new Date().toLocaleDateString()}.csv`;
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
         }
 
         function startUltraFastScanner() {
-            html5QrCode = new Html5Qrcode("reader", {
-                experimentalFeatures: { useBarCodeDetectorIfSupported: true }
-            });
-
-            const config = {
-                fps: 25,
-                qrbox: function(viewfinderWidth, viewfinderHeight) {
-                    let minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                    return { width: Math.floor(minEdge * 0.8), height: Math.floor(minEdge * 0.8) };
-                },
-                aspectRatio: 1.0
-            };
-
-            html5QrCode.start(
-                { facingMode: "environment" },
-                config,
-                onScanSuccess,
-                () => {}
-            ).catch(err => {
-                document.getElementById('status').innerText = "Camera access needed!";
-            });
+            html5QrCode = new Html5Qrcode("reader", { experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
+            html5QrCode.start({ facingMode: "environment" }, { fps: 25, qrbox: { width: 250, height: 250 } }, onScanSuccess, () => {});
         }
     </script>
 </body>
