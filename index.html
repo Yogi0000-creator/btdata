@@ -64,13 +64,19 @@
       </button>
     </header>
 
-    <!-- Google Sheet Webhook Sync Input -->
+    <!-- Google Sheet Webhook Sync Input (Locked with Pencil Unlock Button) -->
     <div class="bg-slate-800/60 border border-slate-700/50 p-4 rounded-2xl mb-4 shadow-lg">
       <label class="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-2">
         <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
         Google Apps Script Webhook URL
       </label>
-      <input type="text" id="webhookUrl" placeholder="https://script.google.com/macros/s/.../exec" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono transition">
+      <div class="flex items-center gap-2">
+        <input type="text" id="webhookUrl" readonly placeholder="https://script.google.com/macros/s/.../exec" class="w-full bg-slate-900/60 border border-slate-700/80 text-slate-400 rounded-xl p-2.5 text-xs font-mono transition cursor-not-allowed focus:outline-none">
+        <button onclick="unlockWebhookUrl()" title="Unlock & Edit Webhook URL" class="bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-200 p-2.5 rounded-xl transition flex items-center justify-center active:scale-95">
+          ✏️
+        </button>
+      </div>
+      <p id="webhookLockStatus" class="text-[10px] text-slate-400 mt-1">🔒 Locked by default. Click ✏️ to edit.</p>
     </div>
 
     <!-- Session & Vendor Panel -->
@@ -83,12 +89,14 @@
       </div>
       <div>
         <label class="block text-xs font-medium text-slate-400 mb-1">Supply Vendor</label>
-        <select id="supplyVendor" class="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-xl p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
-          <option value="SHAKTI SUPPLY">SHAKTI SUPPLY</option>
+        <select id="supplyVendor" onchange="toggleCustomVendorInput()" class="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-xl p-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
           <option value="BILSI SUPPLY">BILSI SUPPLY</option>
+          <option value="SHAKTI SUPPLY">SHAKTI SUPPLY</option>
           <option value="DAILY WISE SUPPLY">DAILY WISE SUPPLY</option>
           <option value="Other">Other</option>
         </select>
+        <!-- Custom Vendor Text Input (Hidden by default) -->
+        <input type="text" id="customVendorInput" placeholder="Enter Custom Supplier Name" class="w-full bg-slate-900 border border-indigo-500/80 text-indigo-300 rounded-xl p-2 text-xs mt-2 hidden focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
       </div>
     </div>
 
@@ -200,6 +208,43 @@
       checkLoginState();
     }
 
+    // Toggle custom vendor input box
+    function toggleCustomVendorInput() {
+      const vendorSelect = document.getElementById("supplyVendor").value;
+      const customInput = document.getElementById("customVendorInput");
+      if (vendorSelect === "Other") {
+        customInput.classList.remove("hidden");
+        customInput.focus();
+      } else {
+        customInput.classList.add("hidden");
+        customInput.value = "";
+      }
+    }
+
+    function getSelectedVendor() {
+      const vendorSelect = document.getElementById("supplyVendor").value;
+      if (vendorSelect === "Other") {
+        const customValue = document.getElementById("customVendorInput").value.trim();
+        return customValue !== "" ? customValue : "Other";
+      }
+      return vendorSelect;
+    }
+
+    // Webhook URL Unlock Functionality
+    function unlockWebhookUrl() {
+      const pin = prompt("Enter Password to edit Webhook URL:");
+      if (pin === "002519") {
+        const inputField = document.getElementById("webhookUrl");
+        inputField.removeAttribute("readonly");
+        inputField.classList.remove("bg-slate-900/60", "text-slate-400", "cursor-not-allowed");
+        inputField.classList.add("bg-slate-900", "text-indigo-300", "border-indigo-500", "focus:ring-2", "focus:ring-indigo-500");
+        inputField.focus();
+        document.getElementById("webhookLockStatus").innerHTML = "🔓 <span class='text-emerald-400 font-medium'>Unlocked! You can edit the URL now.</span>";
+      } else if (pin !== null) {
+        alert("❌ Galat Password! Access Denied.");
+      }
+    }
+
     function generateSessionId() {
       const now = new Date();
       return 'BG-' + now.getFullYear() + (now.getMonth()+1).toString().padStart(2, '0') + now.getDate().toString().padStart(2, '0') + '-' + Math.floor(1000 + Math.random() * 9000);
@@ -208,6 +253,11 @@
     function initSession() {
       currentSessionId = generateSessionId();
       document.getElementById("sessionIdDisplay").innerText = currentSessionId;
+      
+      const savedUrl = localStorage.getItem("bg_webhook_url");
+      if (savedUrl) {
+        document.getElementById("webhookUrl").value = savedUrl;
+      }
     }
 
     function playBeep() {
@@ -239,7 +289,6 @@
       const parsed = parseQRData(decodedText);
       if (!parsed) return;
 
-      // Duplicate Checking
       if (scannedBillNumbers.has(parsed.billNo)) {
         alert(`❌ Duplicate Entry Warning!\nBill No: ${parsed.billNo} is already scanned in this session.`);
         return;
@@ -256,7 +305,7 @@
 
       const now = new Date();
       const scanTimestamp = now.toLocaleDateString('en-GB') + " " + now.toLocaleTimeString();
-      const supplyVendor = document.getElementById("supplyVendor").value;
+      const supplyVendor = getSelectedVendor();
 
       const record = {
         sessionId: currentSessionId,
@@ -365,6 +414,8 @@
         alert("Scan at least one bill first!");
         return;
       }
+
+      localStorage.setItem("bg_webhook_url", webhookUrl);
 
       try {
         await fetch(webhookUrl, {
