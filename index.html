@@ -64,20 +64,20 @@
       </button>
     </header>
 
-    <!-- Google Sheet Webhook Sync Input (Locked & Strictly Readonly) -->
+    <!-- Google Sheet Webhook Sync Input (With Lock / Edit Toggle) -->
     <div class="bg-slate-800/60 border border-slate-700/50 p-4 rounded-2xl mb-4 shadow-lg">
       <label class="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-2">
         <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
         Google Apps Script Webhook URL
       </label>
       <div class="relative flex items-center">
-        <input type="text" id="webhookUrl" readonly disabled placeholder="https://script.google.com/macros/s/.../exec" class="w-full bg-slate-950/80 border border-slate-700/80 text-slate-400 rounded-xl py-2.5 pl-3 pr-12 text-xs font-mono transition cursor-not-allowed select-none focus:outline-none">
-        <button type="button" onclick="unlockWebhookUrl()" title="Unlock & Edit Webhook URL" class="absolute right-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold p-1.5 px-2.5 rounded-lg text-xs shadow-md transition active:scale-95 flex items-center justify-center">
+        <input type="text" id="webhookUrl" readonly disabled placeholder="https://script.google.com/macros/s/.../exec" class="w-full bg-slate-950/80 border border-slate-700/80 text-slate-400 rounded-xl py-2.5 pl-3 pr-20 text-xs font-mono transition cursor-not-allowed select-none focus:outline-none">
+        <button type="button" id="webhookToggleBtn" onclick="toggleWebhookLock()" title="Unlock/Lock Webhook URL" class="absolute right-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold p-1.5 px-2.5 rounded-lg text-xs shadow-md transition active:scale-95 flex items-center justify-center">
           ✏️ Edit
         </button>
       </div>
       <p id="webhookLockStatus" class="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1">
-        🔒 <span>Protected field. Click <b>✏️ Edit</b> and enter PIN to change.</span>
+        🔒 <span>Protected field. Saved in browser.</span>
       </p>
     </div>
 
@@ -134,7 +134,7 @@
     <div class="bg-slate-800/60 border border-slate-700/50 p-4 rounded-2xl mb-4 shadow-lg">
       <div class="flex justify-between items-center mb-3">
         <h2 class="text-sm font-bold text-white tracking-wide">Scanned Register</h2>
-        <span class="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded-md font-mono">Live Session</span>
+        <span id="syncStatusBadge" class="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded-md font-mono">Live Session</span>
       </div>
       
       <div class="overflow-x-auto">
@@ -159,7 +159,7 @@
 
     <!-- Submit & Sync Actions -->
     <div class="space-y-3">
-      <button onclick="syncLiveToGoogleSheets()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 rounded-2xl transition shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 text-sm active:scale-[0.99]">
+      <button onclick="syncLiveToGoogleSheets(true)" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 rounded-2xl transition shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 text-sm active:scale-[0.99]">
         <span>🌐</span> Tally & Sync Live to Google Sheet
       </button>
       <button onclick="exportToExcel()" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-semibold py-2.5 rounded-2xl transition text-xs flex items-center justify-center gap-2">
@@ -178,6 +178,7 @@
     let currentFacingMode = "environment";
     let html5QrCode = null;
     let currentSessionId = "";
+    let isDataSynced = true; // Track sync status
 
     function checkLoginState() {
       const isLoggedIn = localStorage.getItem("isLoggedIn");
@@ -204,13 +205,73 @@
       }
     }
 
-    function handleLogout() {
+    async function handleLogout() {
+      if (scannedData.length > 0 && !isDataSynced) {
+        const confirmSync = confirm("⚠️ Unsynced scanned data exists!\n\nDo you want to sync data to Google Sheet before Logout?");
+        if (confirmSync) {
+          const syncSuccess = await syncLiveToGoogleSheets(false);
+          if (!syncSuccess) {
+            const forceLogout = confirm("Sync failed. Are you sure you want to logout without syncing?");
+            if (!forceLogout) return;
+          }
+        }
+      }
+
       localStorage.removeItem("isLoggedIn");
       if (html5QrCode) html5QrCode.stop();
+      
+      // Reset Session on Logout so next login gets a fresh Session ID
+      scannedData = [];
+      scannedBillNumbers.clear();
+      isDataSynced = true;
+      
       checkLoginState();
     }
 
-    // Toggle custom vendor input box
+    // Webhook Lock/Unlock Toggle Functionality
+    function toggleWebhookLock() {
+      const inputField = document.getElementById("webhookUrl");
+      const toggleBtn = document.getElementById("webhookToggleBtn");
+      const statusText = document.getElementById("webhookLockStatus");
+
+      if (inputField.hasAttribute("disabled")) {
+        // Unlock prompt
+        const pin = prompt("Enter Password to edit Webhook URL:");
+        if (pin === "002519") {
+          inputField.removeAttribute("readonly");
+          inputField.removeAttribute("disabled");
+          inputField.classList.remove("bg-slate-950/80", "text-slate-400", "cursor-not-allowed", "select-none");
+          inputField.classList.add("bg-slate-900", "text-indigo-300", "border-indigo-500", "focus:ring-2", "focus:ring-indigo-500");
+          inputField.focus();
+
+          toggleBtn.innerHTML = "🔒 Lock";
+          toggleBtn.classList.remove("bg-indigo-600", "hover:bg-indigo-500");
+          toggleBtn.classList.add("bg-emerald-600", "hover:bg-emerald-500");
+          
+          statusText.innerHTML = "🔓 <span class='text-emerald-400 font-medium'>Unlocked! Edit URL and click <b>🔒 Lock</b> to save.</span>";
+        } else if (pin !== null) {
+          alert("❌ Galat Password! Access Denied.");
+        }
+      } else {
+        // Lock field and save to localStorage
+        const urlValue = inputField.value.trim();
+        if (urlValue) {
+          localStorage.setItem("bg_webhook_url", urlValue);
+        }
+
+        inputField.setAttribute("readonly", "true");
+        inputField.setAttribute("disabled", "true");
+        inputField.classList.add("bg-slate-950/80", "text-slate-400", "cursor-not-allowed", "select-none");
+        inputField.classList.remove("bg-slate-900", "text-indigo-300", "border-indigo-500", "focus:ring-2", "focus:ring-indigo-500");
+
+        toggleBtn.innerHTML = "✏️️ Edit";
+        toggleBtn.classList.remove("bg-emerald-600", "hover:bg-emerald-500");
+        toggleBtn.classList.add("bg-indigo-600", "hover:bg-indigo-500");
+
+        statusText.innerHTML = "🔒 <span>Protected & Saved in browser.</span>";
+      }
+    }
+
     function toggleCustomVendorInput() {
       const vendorSelect = document.getElementById("supplyVendor").value;
       const customInput = document.getElementById("customVendorInput");
@@ -230,22 +291,6 @@
         return customValue !== "" ? customValue : "Other";
       }
       return vendorSelect;
-    }
-
-    // Webhook URL Unlock Functionality
-    function unlockWebhookUrl() {
-      const pin = prompt("Enter Password to edit Webhook URL:");
-      if (pin === "002519") {
-        const inputField = document.getElementById("webhookUrl");
-        inputField.removeAttribute("readonly");
-        inputField.removeAttribute("disabled");
-        inputField.classList.remove("bg-slate-950/80", "text-slate-400", "cursor-not-allowed", "select-none");
-        inputField.classList.add("bg-slate-900", "text-indigo-300", "border-indigo-500", "focus:ring-2", "focus:ring-indigo-500");
-        inputField.focus();
-        document.getElementById("webhookLockStatus").innerHTML = "🔓 <span class='text-emerald-400 font-medium'>Unlocked! You can edit the URL now.</span>";
-      } else if (pin !== null) {
-        alert("❌ Galat Password! Access Denied.");
-      }
     }
 
     function generateSessionId() {
@@ -322,6 +367,7 @@
 
       scannedData.push(record);
       scannedBillNumbers.add(parsed.billNo);
+      isDataSynced = false; // New data needs sync
       updateUI();
 
       setTimeout(() => {
@@ -380,6 +426,7 @@
       if (confirm("Clear current session and reset all scanned data?")) {
         scannedData = [];
         scannedBillNumbers.clear();
+        isDataSynced = true;
         initSession();
         updateUI();
       }
@@ -407,18 +454,16 @@
       XLSX.writeFile(workbook, `Bills_Gateway_${currentSessionId}.xlsx`);
     }
 
-    async function syncLiveToGoogleSheets() {
+    async function syncLiveToGoogleSheets(showAlert = true) {
       const webhookUrl = document.getElementById("webhookUrl").value.trim();
       if (!webhookUrl) {
-        alert("Please enter Google Apps Script Webhook URL!");
-        return;
+        if (showAlert) alert("Please enter and save Google Apps Script Webhook URL!");
+        return false;
       }
       if (scannedData.length === 0) {
-        alert("Scan at least one bill first!");
-        return;
+        if (showAlert) alert("Scan at least one bill first!");
+        return false;
       }
-
-      localStorage.setItem("bg_webhook_url", webhookUrl);
 
       try {
         await fetch(webhookUrl, {
@@ -427,9 +472,19 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(scannedData)
         });
-        alert("✅ Tally Successful! Data synced to Google Sheet.");
+
+        isDataSynced = true;
+        
+        // Clear scanned items from screen after successful sync
+        scannedData = [];
+        scannedBillNumbers.clear();
+        updateUI();
+
+        if (showAlert) alert("✅ Sync Successful! Data sent to Google Sheet and cleared from screen.");
+        return true;
       } catch (err) {
-        alert("❌ Error syncing data: " + err.message);
+        if (showAlert) alert("❌ Error syncing data: " + err.message);
+        return false;
       }
     }
 
